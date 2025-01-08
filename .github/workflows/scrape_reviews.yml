@@ -11,8 +11,6 @@ jobs:
     
     steps:
     - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0  # Fetch all history for proper git operations
     
     - name: Set up Python
       uses: actions/setup-python@v2
@@ -24,35 +22,25 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
         
-    - name: Create .env file
-      run: |
-        echo "NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=${{ secrets.GOOGLE_MAPS_API_KEY }}" > .env.local
-        
     - name: Run scraper
+      env:
+        NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
       run: |
-        echo "Starting scraper..."
         python test_scraper.py
-        echo "Scraper finished"
         
-    - name: Check for changes
-      id: check_changes
+    - name: Check for new data
       run: |
-        git status --porcelain company_reviews_new.csv | grep "company_reviews_new.csv" || echo "No changes to commit"
+        if [ -f company_reviews_new.csv ]; then
+          echo "Found new reviews:"
+          cat company_reviews_new.csv
+        else
+          echo "No new reviews found"
+        fi
         
     - name: Commit and push if changes
-      if: steps.check_changes.outputs.stdout
       run: |
-        git config --local user.email "github-actions[bot]@users.noreply.github.com"
-        git config --local user.name "github-actions[bot]"
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
         git add company_reviews_new.csv
-        git commit -m "📊 Update reviews data [skip ci]"
-        git push
-        
-    - name: Report status
-      if: always()
-      run: |
-        if [ ${{ job.status }} == 'success' ]; then
-          echo "✅ Scraper ran successfully!"
-        else
-          echo "❌ Scraper encountered an error"
-        fi 
+        git diff --staged --quiet || (git commit -m "Update reviews data [skip ci]" && git push)
+        echo "Changes pushed to repository" 
